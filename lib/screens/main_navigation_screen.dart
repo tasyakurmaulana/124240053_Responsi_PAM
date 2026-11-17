@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-
 import '../services/preference_service.dart';
+import '../services/database_helper.dart';
+import '../models/product.dart';
 import 'home_screen.dart';
-import 'favorite_screen.dart';
-import 'episode_screen.dart';
+import 'wishlist_screen.dart';
 import 'login_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
@@ -17,18 +17,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
   String _username = '';
 
-  final List<Widget> _screens = const [
-    HomeScreen(),
-    FavoriteScreen(),
-    EpisodeScreen(),
-  ];
+  late final List<Widget> _screens;
 
-  final List<String> _titles = ['ShoppingHub', 'Favorites', 'Episodes View'];
+  final List<String> _titles = ['ShoppingHub', 'Wishlist'];
 
   @override
   void initState() {
     super.initState();
+    _screens = [
+      HomeScreen(onGoToWishlist: () => setState(() => _currentIndex = 1)),
+      const WishlistScreen(),
+    ];
     _loadUsername();
+    // Memastikan data wishlist di local database dimuat
+    DatabaseHelper.instance.loadWishlist();
   }
 
   Future<void> _loadUsername() async {
@@ -52,7 +54,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ),
         ),
         content: const Text(
-          'Apakah Anda yakin ingin keluar dari aplikasi?',
+          'Apakah Anda yakin ingin keluar dari ShoppingHub?',
           style: TextStyle(color: Color(0xFF475569)),
         ),
         actions: [
@@ -66,7 +68,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
+              backgroundColor: const Color(0xFFDC2626),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -107,6 +109,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 fontSize: 20,
               ),
             ),
+            // Tampilkan nama pengguna yang sedang login pada AppBar sesuai ketentuan
             if (_username.isNotEmpty)
               Text(
                 'Halo, $_username 👋',
@@ -119,6 +122,52 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ],
         ),
         actions: [
+          // Sediakan tombol untuk menuju halaman Wishlist pada AppBar sesuai ketentuan
+          ValueListenableBuilder<List<Product>>(
+            valueListenable: DatabaseHelper.instance.wishlistNotifier,
+            builder: (context, wishlist, _) {
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      _currentIndex == 1
+                          ? Icons.favorite
+                          : Icons.favorite_border,
+                      color: _currentIndex == 1
+                          ? const Color(0xFFDC2626)
+                          : const Color(0xFF64748B),
+                    ),
+                    tooltip: 'Halaman Wishlist',
+                    onPressed: () {
+                      setState(() => _currentIndex = 1);
+                    },
+                  ),
+                  if (wishlist.isNotEmpty)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFDC2626),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          wishlist.length.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          // Tombol Logout
           IconButton(
             icon: const Icon(Icons.logout_rounded, color: Color(0xFF64748B)),
             tooltip: 'Logout',
@@ -135,7 +184,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
           backgroundColor: Colors.white,
-          selectedItemColor: const Color(0xFF7C3AED), // Ungu
+          selectedItemColor: const Color(0xFF7C3AED),
           unselectedItemColor: const Color(0xFF94A3B8),
           selectedLabelStyle: const TextStyle(
             fontWeight: FontWeight.bold,
@@ -149,9 +198,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           },
           items: const [
             BottomNavigationBarItem(
-              icon: Icon(Icons.person_search_outlined),
-              activeIcon: Icon(Icons.person_search),
-              label: 'Products',
+              icon: Icon(Icons.storefront_outlined),
+              activeIcon: Icon(Icons.storefront),
+              label: 'Produk',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.favorite_outline),

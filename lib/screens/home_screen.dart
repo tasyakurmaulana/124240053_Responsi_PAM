@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-
-import '../models/character.dart';
+import '../models/product.dart';
 import '../services/api_service.dart';
-import '../services/preference_service.dart';
+import '../services/database_helper.dart';
 import 'detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final VoidCallback? onGoToWishlist;
+
+  const HomeScreen({super.key, this.onGoToWishlist});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -14,28 +15,18 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
-  List<Character> _characters = [];
+  List<Product> _products = [];
+  List<String> _categories = ['All'];
+  String _selectedCategory = 'All';
   bool _isLoading = true;
+  bool _isLoadingCategories = true;
   String? _errorMessage;
-  // ==========================================================================
-  // 📌 TIPS RESPONSI: FILTER & PENCARIAN API
-  // ==========================================================================
-  // Jika API baru memiliki kategori atau filter yang berbeda, ganti list di bawah ini:
-  // Contoh: final List<String> _statusFilters = ['All', 'Electronics', 'Jewelery', "Men's Clothing"];
-  // ==========================================================================
-  String _selectedStatus = 'All';
-  final List<String> _statusFilters = [
-    'All',
-    'Beauty',
-    'Fragrances',
-    'Furniture',
-    'Groceries',
-  ];
 
   @override
   void initState() {
     super.initState();
-    _fetchCharacters();
+    _fetchCategories();
+    _fetchProducts();
   }
 
   @override
@@ -44,27 +35,39 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // --------------------------------------------------------------------------
-  // Fungsi pemanggilan API ke ApiService
-  // --------------------------------------------------------------------------
-  Future<void> _fetchCharacters() async {
+  // 1. Mengambil Kategori dari API (GET /products/category-list)
+  Future<void> _fetchCategories() async {
+    try {
+      final categoriesFromApi = await ApiService.getCategories();
+      if (!mounted) return;
+      setState(() {
+        _categories = ['All', ...categoriesFromApi];
+        _isLoadingCategories = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingCategories = false);
+    }
+  }
+
+  // 2. Mengambil Produk dari API (dengan kategori & search)
+  Future<void> _fetchProducts() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      // 👉 Panggil fungsi ApiService yang sesuai dengan parameter filter/search API baru
-      final results = await ApiService.getCharacters(
-        category: _selectedStatus == 'All' ? null : _selectedStatus,
-        title: _searchController.text.trim().isNotEmpty
+      final results = await ApiService.getProducts(
+        category: _selectedCategory == 'All' ? null : _selectedCategory,
+        search: _searchController.text.trim().isNotEmpty
             ? _searchController.text.trim()
             : null,
       );
 
       if (!mounted) return;
       setState(() {
-        _characters = results;
+        _products = results;
         _isLoading = false;
       });
     } catch (e) {
@@ -76,19 +79,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'alive':
-        return const Color(0xFF10B981); // Hijau segar
-      case 'dead':
-        return const Color(0xFFEF4444); // Merah
-      default:
-        return const Color(0xFFF59E0B); // Amber / Kuning
-    }
-  }
-
-  Future<void> _toggleFavorite(Character character) async {
-    final added = await PreferenceService.instance.toggleFavorite(character);
+  Future<void> _toggleWishlist(Product product) async {
+    final added = await DatabaseHelper.instance.toggleWishlist(product);
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -96,12 +88,11 @@ class _HomeScreenState extends State<HomeScreen> {
       SnackBar(
         content: Text(
           added
-              ? '${character.title} ditambahkan ke favorit!'
-              : '${character.title} dihapus dari favorit.',
+              ? '${product.title} ditambahkan ke wishlist'
+              : '${product.title} dihapus dari wishlist',
         ),
-        backgroundColor: added
-            ? const Color(0xFF7C3AED)
-            : const Color(0xFFEF4444),
+        backgroundColor:
+            added ? const Color(0xFF10B981) : const Color(0xFFEF4444),
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
       ),
@@ -112,21 +103,20 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Search & Filter Header
+        // Header: Search & Category Filter Chips
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           color: Colors.white,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Search Input (Bonus)
+              // Search Input
               TextField(
                 controller: _searchController,
-                style: const TextStyle(color: Color(0xFF0F172A)),
                 textInputAction: TextInputAction.search,
-                onSubmitted: (_) => _fetchCharacters(),
+                onSubmitted: (_) => _fetchProducts(),
                 decoration: InputDecoration(
-                  hintText: 'Cari Title (contoh: Mascara, Eyeshadow)...',
+                  hintText: 'Cari produk (contoh: Mascara, Laptop)...',
                   hintStyle: const TextStyle(
                     color: Color(0xFF94A3B8),
                     fontSize: 14,
@@ -143,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           onPressed: () {
                             _searchController.clear();
-                            _fetchCharacters();
+                            _fetchProducts();
                           },
                         )
                       : IconButton(
@@ -151,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             Icons.arrow_forward_rounded,
                             color: Color(0xFF7C3AED),
                           ),
-                          onPressed: _fetchCharacters,
+                          onPressed: _fetchProducts,
                         ),
                   filled: true,
                   fillColor: const Color(0xFFF1F5F9),
@@ -163,59 +153,68 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
                   ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: Color(0xFF7C3AED),
-                      width: 1.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Horizontal Category Chips dari API
+              if (_isLoadingCategories)
+                const SizedBox(
+                  height: 36,
+                  child: Center(
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 10),
+                )
+              else
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: _categories.map((category) {
+                      final isSelected = _selectedCategory.toLowerCase() ==
+                          category.toLowerCase();
+                      final displayName = category == 'All'
+                          ? 'Semua'
+                          : category.replaceAll('-', ' ').toUpperCase();
 
-              // Filter Status Chips (All, Alive, Dead, Unknown)
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: _statusFilters.map((status) {
-                    final isSelected =
-                        _selectedStatus.toLowerCase() == status.toLowerCase();
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: ChoiceChip(
-                        selected: isSelected,
-                        label: Text(status),
-                        labelStyle: TextStyle(
-                          color: isSelected
-                              ? Colors.white
-                              : const Color(0xFF475569),
-                          fontWeight: isSelected
-                              ? FontWeight.bold
-                              : FontWeight.w500,
-                          fontSize: 13,
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: ChoiceChip(
+                          selected: isSelected,
+                          label: Text(displayName),
+                          labelStyle: TextStyle(
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF475569),
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            fontSize: 12,
+                          ),
+                          backgroundColor: Colors.white,
+                          selectedColor: const Color(0xFF7C3AED),
+                          side: BorderSide(
+                            color: isSelected
+                                ? const Color(0xFF7C3AED)
+                                : const Color(0xFFE2E8F0),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          onSelected: (selected) {
+                            if (selected) {
+                              setState(() => _selectedCategory = category);
+                              _fetchProducts();
+                            }
+                          },
                         ),
-                        backgroundColor: Colors.white,
-                        selectedColor: const Color(0xFF7C3AED), // Ungu
-                        side: BorderSide(
-                          color: isSelected
-                              ? const Color(0xFF7C3AED)
-                              : const Color(0xFFE2E8F0),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        onSelected: (selected) {
-                          if (selected) {
-                            setState(() => _selectedStatus = status);
-                            _fetchCharacters();
-                          }
-                        },
-                      ),
-                    );
-                  }).toList(),
+                      );
+                    }).toList(),
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -237,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
             CircularProgressIndicator(color: Color(0xFF7C3AED)),
             SizedBox(height: 14),
             Text(
-              'Memuat data product...',
+              'Memuat daftar produk...',
               style: TextStyle(
                 color: Color(0xFF64748B),
                 fontWeight: FontWeight.w500,
@@ -262,7 +261,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 14),
               const Text(
-                'Gagal Mengambil Data',
+                'Gagal Mengambil Data Produk',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -277,7 +276,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
-                onPressed: _fetchCharacters,
+                onPressed: _fetchProducts,
                 icon: const Icon(Icons.refresh),
                 label: const Text('Coba Lagi'),
                 style: ElevatedButton.styleFrom(
@@ -294,7 +293,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    if (_characters.isEmpty) {
+    if (_products.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -315,18 +314,18 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Coba kata kunci atau filter status yang lain.',
+              'Coba kata kunci atau kategori yang lain.',
               style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
             ),
             const SizedBox(height: 16),
             TextButton(
               onPressed: () {
                 _searchController.clear();
-                setState(() => _selectedStatus = 'All');
-                _fetchCharacters();
+                setState(() => _selectedCategory = 'All');
+                _fetchProducts();
               },
               child: const Text(
-                'Reset Pencarian',
+                'Reset Filter',
                 style: TextStyle(
                   color: Color(0xFF7C3AED),
                   fontWeight: FontWeight.bold,
@@ -338,21 +337,20 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    return ValueListenableBuilder<List<Character>>(
-      valueListenable: PreferenceService.instance.favoriteCharactersNotifier,
-      builder: (context, favorites, _) {
-        final favoriteIds = favorites.map((f) => f.id).toSet();
+    return ValueListenableBuilder<List<Product>>(
+      valueListenable: DatabaseHelper.instance.wishlistNotifier,
+      builder: (context, wishlist, _) {
+        final wishlistIds = wishlist.map((p) => p.id).toSet();
 
         return RefreshIndicator(
           color: const Color(0xFF7C3AED),
-          onRefresh: _fetchCharacters,
+          onRefresh: _fetchProducts,
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            itemCount: _characters.length,
+            itemCount: _products.length,
             itemBuilder: (context, index) {
-              final character = _characters[index];
-              final isFav = favoriteIds.contains(character.id);
-              final statusColor = _getStatusColor(character.category);
+              final product = _products[index];
+              final isWish = wishlistIds.contains(product.id);
 
               return Card(
                 color: Colors.white,
@@ -362,8 +360,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                   side: BorderSide(
-                    color: isFav
-                        ? const Color(0xFFF59E0B).withOpacity(0.5)
+                    color: isWish
+                        ? const Color(0xFFEF4444).withOpacity(0.3)
                         : const Color(0xFFE2E8F0),
                     width: 1,
                   ),
@@ -375,7 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (context) =>
-                            DetailScreen(character: character),
+                            DetailScreen(productId: product.id),
                       ),
                     );
                   },
@@ -383,23 +381,27 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.all(12.0),
                     child: Row(
                       children: [
-                        // Foto Karakter
+                        // Gambar Produk
                         Hero(
-                          tag: 'char-${character.id}',
+                          tag: 'product-${product.id}',
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(12),
                             child: Image.network(
-                              character.images,
-                              width: 64,
-                              height: 64,
+                              product.thumbnail.isNotEmpty
+                                  ? product.thumbnail
+                                  : (product.images.isNotEmpty
+                                      ? product.images.first
+                                      : ''),
+                              width: 72,
+                              height: 72,
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) =>
                                   Container(
-                                    width: 64,
-                                    height: 64,
+                                    width: 72,
+                                    height: 72,
                                     color: const Color(0xFFF1F5F9),
                                     child: const Icon(
-                                      Icons.person,
+                                      Icons.shopping_bag_outlined,
                                       color: Color(0xFF94A3B8),
                                     ),
                                   ),
@@ -408,81 +410,91 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(width: 14),
 
-                        // Info Karakter
+                        // Info Produk: Nama, Kategori, Harga
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                character.title,
+                                product.title,
                                 style: const TextStyle(
                                   color: Color(0xFF0F172A),
-                                  fontSize: 16,
+                                  fontSize: 15,
                                   fontWeight: FontWeight.bold,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
+                              const SizedBox(height: 5),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      const Color(0xFF7C3AED).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  product.category.toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Color(0xFF7C3AED),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
                               const SizedBox(height: 6),
                               Row(
                                 children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 3,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: statusColor.withOpacity(0.12),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 3.5,
-                                          backgroundColor: statusColor,
-                                        ),
-                                        const SizedBox(width: 5),
-                                        Text(
-                                          character.category,
-                                          style: TextStyle(
-                                            color: statusColor,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
+                                  Text(
+                                    '\$${product.price.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      color: Color(0xFF0F172A),
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      character.brand,
-                                      style: const TextStyle(
-                                        color: Color(0xFF64748B),
-                                        fontSize: 12,
+                                  if (product.discountPercentage > 0)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                        vertical: 1.5,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFEF2F2),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        '-${product.discountPercentage.toStringAsFixed(0)}%',
+                                        style: const TextStyle(
+                                          color: Color(0xFFEF4444),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ),
-                                  ),
                                 ],
                               ),
                             ],
                           ),
                         ),
 
-                        // Tombol Favorit
+                        // Tombol Wishlist Cepat
                         IconButton(
                           icon: Icon(
-                            isFav ? Icons.favorite : Icons.favorite_border,
-                            color: isFav
+                            isWish ? Icons.favorite : Icons.favorite_border,
+                            color: isWish
                                 ? const Color(0xFFEF4444)
                                 : const Color(0xFF94A3B8),
                             size: 26,
                           ),
-                          tooltip: isFav ? 'Hapus favorit' : 'Tambah favorit',
-                          onPressed: () => _toggleFavorite(character),
+                          tooltip: isWish
+                              ? 'Hapus dari Wishlist'
+                              : 'Tambah ke Wishlist',
+                          onPressed: () => _toggleWishlist(product),
                         ),
                       ],
                     ),

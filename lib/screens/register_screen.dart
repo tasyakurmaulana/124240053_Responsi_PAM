@@ -108,7 +108,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    'Daftar untuk menjelajahi pruduk di ShoppingHub.',
+                    'Daftar untuk menjelajahi produk di ShoppingHub.',
                     style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
                   ),
                   const SizedBox(height: 28),
