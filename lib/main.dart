@@ -1,28 +1,34 @@
 import 'package:flutter/material.dart';
-import 'services/database_helper.dart';
-import 'services/preference_service.dart';
+import 'package:get/get.dart';
+import 'controller/auth_controller.dart';
+import 'controller/product_controller.dart';
+import 'controller/wishlist_controller.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation_screen.dart';
+import 'services/database_helper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inisialisasi Local Database (SQLite) & Session
   await DatabaseHelper.instance.database;
-  await DatabaseHelper.instance.loadWishlist();
-  final isLoggedIn = await PreferenceService.instance.isLoggedIn();
 
-  runApp(ShoppingHubApp(isLoggedIn: isLoggedIn));
+  final authController = Get.put(AuthController());
+  Get.put(ProductController());
+  Get.put(WishlistController());
+
+  await authController.checkLogin();
+
+  runApp(const ShoppingHubApp());
 }
 
 class ShoppingHubApp extends StatelessWidget {
-  final bool isLoggedIn;
-
-  const ShoppingHubApp({super.key, required this.isLoggedIn});
+  const ShoppingHubApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    final authController = Get.find<AuthController>();
+
+    return GetMaterialApp(
       title: 'ShoppingHub',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -30,8 +36,8 @@ class ShoppingHubApp extends StatelessWidget {
         brightness: Brightness.light,
         scaffoldBackgroundColor: const Color(0xFFF8FAFC),
         colorScheme: const ColorScheme.light(
-          primary: Color(0xFF7C3AED), // Ungu Modern
-          secondary: Color(0xFFF59E0B), // Amber Cerah
+          primary: Color(0xFF7C3AED),
+          secondary: Color(0xFFF59E0B),
           surface: Colors.white,
         ),
         appBarTheme: const AppBarTheme(
@@ -50,7 +56,9 @@ class ShoppingHubApp extends StatelessWidget {
           ),
         ),
       ),
-      home: isLoggedIn ? const MainNavigationScreen() : const LoginScreen(),
+      home: Obx(() => authController.isLoggedIn.value
+          ? const MainNavigationScreen()
+          : const LoginScreen()),
     );
   }
 }

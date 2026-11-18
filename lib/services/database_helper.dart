@@ -8,7 +8,6 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
 
-  // ValueNotifier agar perubahan Wishlist langsung reaktif di semua halaman
   final ValueNotifier<List<Product>> wishlistNotifier = ValueNotifier<List<Product>>([]);
 
   DatabaseHelper._init();
@@ -31,7 +30,6 @@ class DatabaseHelper {
   }
 
   Future _createDB(Database db, int version) async {
-    // 1. Tabel Users untuk Autentikasi Login (Local Database)
     await db.execute('''
       CREATE TABLE users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,7 +38,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // 2. Tabel Wishlist untuk Menyimpan Produk Wishlist (Local Database)
     await db.execute('''
       CREATE TABLE wishlist (
         id INTEGER PRIMARY KEY,
@@ -57,10 +54,6 @@ class DatabaseHelper {
       )
     ''');
   }
-
-  // ==========================================================================
-  // OPERASI USER (LOGIN & REGISTER)
-  // ==========================================================================
 
   Future<int> register(User user) async {
     final db = await instance.database;
@@ -92,10 +85,6 @@ class DatabaseHelper {
     return maps.isNotEmpty;
   }
 
-  // ==========================================================================
-  // OPERASI WISHLIST (LOCAL DATABASE)
-  // ==========================================================================
-
   Future<void> loadWishlist() async {
     final db = await instance.database;
     final maps = await db.query('wishlist', orderBy: 'id DESC');
@@ -125,10 +114,10 @@ class DatabaseHelper {
     final exists = await isWishlist(product.id);
     if (exists) {
       await removeFromWishlist(product.id);
-      return false; // Dihapus dari wishlist
+      return false;
     } else {
       await addToWishlist(product);
-      return true; // Ditambahkan ke wishlist
+      return true;
     }
   }
 

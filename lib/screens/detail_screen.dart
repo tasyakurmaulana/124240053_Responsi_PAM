@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import '../models/product.dart';
 import '../services/api_service.dart';
-import '../services/database_helper.dart';
+import '../controller/wishlist_controller.dart';
 
 class DetailScreen extends StatefulWidget {
   final int productId;
@@ -13,10 +14,11 @@ class DetailScreen extends StatefulWidget {
 }
 
 class _DetailScreenState extends State<DetailScreen> {
+  final WishlistController wishlistController = Get.find<WishlistController>();
+
   Product? _product;
   bool _isLoading = true;
   String? _errorMessage;
-  bool _isWishlist = false;
   int _selectedImageIndex = 0;
 
   @override
@@ -32,14 +34,11 @@ class _DetailScreenState extends State<DetailScreen> {
     });
 
     try {
-      // Mengambil detail produk dari API berdasarkan ID produk
       final detail = await ApiService.getProductDetail(widget.productId);
-      final inWishlist = await DatabaseHelper.instance.isWishlist(widget.productId);
 
       if (!mounted) return;
       setState(() {
         _product = detail;
-        _isWishlist = inWishlist;
         _isLoading = false;
       });
     } catch (e) {
@@ -49,34 +48,6 @@ class _DetailScreenState extends State<DetailScreen> {
         _isLoading = false;
       });
     }
-  }
-
-  // Sesuai ketentuan:
-  // Ketika produk ditambahkan ke wishlist -> icon berubah warna & SnackBar HIJAU
-  // Ketika produk dihapus dari wishlist -> icon kembali seperti semula & SnackBar MERAH
-  Future<void> _toggleWishlist() async {
-    if (_product == null) return;
-
-    final added = await DatabaseHelper.instance.toggleWishlist(_product!);
-    setState(() {
-      _isWishlist = added;
-    });
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          added
-              ? '${_product!.title} berhasil ditambahkan ke Wishlist!'
-              : '${_product!.title} dihapus dari Wishlist.',
-        ),
-        // HIJAU saat ditambahkan, MERAH saat dihapus
-        backgroundColor: added ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 
   Widget _buildInfoCard({
@@ -158,15 +129,22 @@ class _DetailScreenState extends State<DetailScreen> {
         ),
         actions: [
           if (_product != null)
-            IconButton(
-              icon: Icon(
-                _isWishlist ? Icons.favorite : Icons.favorite_border,
-                color: _isWishlist ? const Color(0xFFDC2626) : const Color(0xFF64748B),
-                size: 26,
-              ),
-              tooltip: _isWishlist ? 'Hapus dari Wishlist' : 'Tambah ke Wishlist',
-              onPressed: _toggleWishlist,
-            ),
+            Obx(() {
+              final isWish = wishlistController.isWishlist(_product!.id);
+              return IconButton(
+                icon: Icon(
+                  isWish ? Icons.favorite : Icons.favorite_border,
+                  color: isWish
+                      ? const Color(0xFFDC2626)
+                      : const Color(0xFF64748B),
+                  size: 26,
+                ),
+                tooltip:
+                    isWish ? 'Hapus dari Wishlist' : 'Tambah ke Wishlist',
+                onPressed: () =>
+                    wishlistController.toggleWishlist(_product!, context),
+              );
+            }),
         ],
       ),
       body: _buildContent(),
@@ -200,7 +178,8 @@ class _DetailScreenState extends State<DetailScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 60, color: Color(0xFFEF4444)),
+              const Icon(Icons.error_outline,
+                  size: 60, color: Color(0xFFEF4444)),
               const SizedBox(height: 14),
               const Text(
                 'Gagal Memuat Detail',
@@ -242,7 +221,6 @@ class _DetailScreenState extends State<DetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Gambar Produk Utama
           Center(
             child: Container(
               height: 240,
@@ -277,7 +255,6 @@ class _DetailScreenState extends State<DetailScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Horizontal Thumbnails jika gambar > 1
           if (displayImages.length > 1) ...[
             SizedBox(
               height: 60,
@@ -322,7 +299,6 @@ class _DetailScreenState extends State<DetailScreen> {
             const SizedBox(height: 16),
           ],
 
-          // Nama Produk
           Text(
             p.title,
             style: const TextStyle(
@@ -333,7 +309,6 @@ class _DetailScreenState extends State<DetailScreen> {
           ),
           const SizedBox(height: 8),
 
-          // Kategori Badge
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
@@ -351,7 +326,6 @@ class _DetailScreenState extends State<DetailScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Harga & Diskon
           Row(
             children: [
               Text(
@@ -365,7 +339,8 @@ class _DetailScreenState extends State<DetailScreen> {
               const SizedBox(width: 12),
               if (p.discountPercentage > 0)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFEF2F2),
                     borderRadius: BorderRadius.circular(6),
@@ -384,7 +359,6 @@ class _DetailScreenState extends State<DetailScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Detail Attributes
           _buildInfoCard(
             icon: Icons.store_outlined,
             label: 'Brand',
@@ -429,7 +403,9 @@ class _DetailScreenState extends State<DetailScreen> {
               border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Text(
-              p.description.isNotEmpty ? p.description : 'Tidak ada deskripsi.',
+              p.description.isNotEmpty
+                  ? p.description
+                  : 'Tidak ada deskripsi.',
               style: const TextStyle(
                 color: Color(0xFF475569),
                 fontSize: 14,
@@ -440,35 +416,42 @@ class _DetailScreenState extends State<DetailScreen> {
 
           const SizedBox(height: 24),
 
-          // Tombol Wishlist di Bagian Bawah
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _toggleWishlist,
-              icon: Icon(
-                _isWishlist ? Icons.favorite : Icons.favorite_border,
-                color: _isWishlist ? const Color(0xFFDC2626) : Colors.white,
-              ),
-              label: Text(
-                _isWishlist ? 'Hapus dari Wishlist' : 'Tambah ke Wishlist',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    _isWishlist ? Colors.white : const Color(0xFF7C3AED),
-                foregroundColor:
-                    _isWishlist ? const Color(0xFF0F172A) : Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                side: _isWishlist
-                    ? const BorderSide(color: Color(0xFFDC2626), width: 1.5)
-                    : BorderSide.none,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+          Obx(() {
+            final isWish = wishlistController.isWishlist(p.id);
+
+            return SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () =>
+                    wishlistController.toggleWishlist(p, context),
+                icon: Icon(
+                  isWish ? Icons.favorite : Icons.favorite_border,
+                  color: isWish ? const Color(0xFFDC2626) : Colors.white,
                 ),
-                elevation: _isWishlist ? 0 : 3,
+                label: Text(
+                  isWish ? 'Hapus dari Wishlist' : 'Tambah ke Wishlist',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      isWish ? Colors.white : const Color(0xFF7C3AED),
+                  foregroundColor:
+                      isWish ? const Color(0xFF0F172A) : Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  side: isWish
+                      ? const BorderSide(color: Color(0xFFDC2626), width: 1.5)
+                      : BorderSide.none,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: isWish ? 0 : 3,
+                ),
               ),
-            ),
-          ),
+            );
+          }),
         ],
       ),
     );

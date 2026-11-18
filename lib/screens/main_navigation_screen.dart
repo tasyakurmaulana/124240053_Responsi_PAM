@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import '../services/preference_service.dart';
-import '../services/database_helper.dart';
-import '../models/product.dart';
+import 'package:get/get.dart';
+import '../controller/auth_controller.dart';
+import '../controller/wishlist_controller.dart';
 import 'home_screen.dart';
 import 'wishlist_screen.dart';
-import 'login_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -15,11 +14,12 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
-  String _username = '';
+
+  final AuthController authController = Get.find<AuthController>();
+  final WishlistController wishlistController = Get.find<WishlistController>();
 
   late final List<Widget> _screens;
-
-  final List<String> _titles = ['ShoppingHub', 'Wishlist'];
+  final List<String> _titles = const ['ShoppingHub', 'Wishlist'];
 
   @override
   void initState() {
@@ -28,16 +28,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       HomeScreen(onGoToWishlist: () => setState(() => _currentIndex = 1)),
       const WishlistScreen(),
     ];
-    _loadUsername();
-    // Memastikan data wishlist di local database dimuat
-    DatabaseHelper.instance.loadWishlist();
-  }
-
-  Future<void> _loadUsername() async {
-    final user = await PreferenceService.instance.getUsername();
-    if (mounted && user != null) {
-      setState(() => _username = user);
-    }
   }
 
   Future<void> _handleLogout() async {
@@ -81,13 +71,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
 
     if (shouldLogout == true) {
-      await PreferenceService.instance.logout();
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-        (route) => false,
-      );
+      await authController.logout();
     }
   }
 
@@ -109,65 +93,64 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 fontSize: 20,
               ),
             ),
-            // Tampilkan nama pengguna yang sedang login pada AppBar sesuai ketentuan
-            if (_username.isNotEmpty)
-              Text(
-                'Halo, $_username 👋',
-                style: const TextStyle(
-                  color: Color(0xFF7C3AED),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+            Obx(
+              () => authController.username.isNotEmpty
+                  ? Text(
+                      'Halo, ${authController.username.value} 👋',
+                      style: const TextStyle(
+                        color: Color(0xFF7C3AED),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
           ],
         ),
         actions: [
-          // Sediakan tombol untuk menuju halaman Wishlist pada AppBar sesuai ketentuan
-          ValueListenableBuilder<List<Product>>(
-            valueListenable: DatabaseHelper.instance.wishlistNotifier,
-            builder: (context, wishlist, _) {
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      _currentIndex == 1
-                          ? Icons.favorite
-                          : Icons.favorite_border,
-                      color: _currentIndex == 1
-                          ? const Color(0xFFDC2626)
-                          : const Color(0xFF64748B),
-                    ),
-                    tooltip: 'Halaman Wishlist',
-                    onPressed: () {
-                      setState(() => _currentIndex = 1);
-                    },
+          Obx(() {
+            final count = wishlistController.wishlist.length;
+
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                IconButton(
+                  icon: Icon(
+                    _currentIndex == 1
+                        ? Icons.favorite
+                        : Icons.favorite_border,
+                    color: _currentIndex == 1
+                        ? const Color(0xFFDC2626)
+                        : const Color(0xFF64748B),
                   ),
-                  if (wishlist.isNotEmpty)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFDC2626),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          wishlist.length.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
+                  tooltip: 'Halaman Wishlist',
+                  onPressed: () {
+                    setState(() => _currentIndex = 1);
+                  },
+                ),
+                if (count > 0)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFDC2626),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        count.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                ],
-              );
-            },
-          ),
-          // Tombol Logout
+                  ),
+              ],
+            );
+          }),
           IconButton(
             icon: const Icon(Icons.logout_rounded, color: Color(0xFF64748B)),
             tooltip: 'Logout',

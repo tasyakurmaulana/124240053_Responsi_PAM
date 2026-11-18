@@ -7,7 +7,6 @@ class PreferenceService {
   static const String _keyIsLoggedIn = 'is_logged_in';
   static const String _keyUsername = 'logged_in_username';
 
-  // --- Auth Session ---
   Future<void> setLoginSession(String username) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyIsLoggedIn, true);

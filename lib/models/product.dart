@@ -26,7 +26,6 @@ class Product {
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
-    // Parse images list
     List<String> parsedImages = [];
     if (json['images'] is List) {
       parsedImages = (json['images'] as List)
@@ -55,7 +54,6 @@ class Product {
     );
   }
 
-  // Khusus untuk SQLite Database
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -68,7 +66,7 @@ class Product {
       'stock': stock,
       'brand': brand,
       'thumbnail': thumbnail,
-      'images': images.join(','), // Disimpan sebagai string dipisahkan koma
+      'images': images.join(','),
     };
   }
 

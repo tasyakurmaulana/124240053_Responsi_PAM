@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import '../services/database_helper.dart';
-import '../services/preference_service.dart';
+import 'package:get/get.dart';
+import '../controller/auth_controller.dart';
 import 'register_screen.dart';
-import 'main_navigation_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -33,26 +32,19 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text;
 
     try {
-      final user = await DatabaseHelper.instance.login(username, password);
+      final authController = Get.find<AuthController>();
+      final success = await authController.login(username, password);
 
       if (!mounted) return;
       setState(() => _isLoading = false);
 
-      if (user != null) {
-        await PreferenceService.instance.setLoginSession(user.username);
-
-        if (!mounted) return;
+      if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Selamat datang, ${user.username}!'),
+            content: Text('Selamat datang, $username!'),
             backgroundColor: const Color(0xFF7C3AED),
             behavior: SnackBarBehavior.floating,
           ),
-        );
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -89,7 +81,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Logo / Avatar dengan gradien Ungu & Kuning
                   Center(
                     child: Container(
                       width: 90,
@@ -140,7 +131,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 32),
 
-                  // Username Input
                   TextFormField(
                     controller: _usernameController,
                     style: const TextStyle(color: Color(0xFF0F172A)),
@@ -177,7 +167,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Password Input
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
@@ -224,7 +213,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 28),
 
-                  // Tombol Login
                   ElevatedButton(
                     onPressed: _isLoading ? null : _handleLogin,
                     style: ElevatedButton.styleFrom(
@@ -257,7 +245,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Link Register
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -267,12 +254,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       GestureDetector(
                         onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const RegisterScreen(),
-                            ),
-                          );
+                          Get.to(() => const RegisterScreen());
                         },
                         child: const Text(
                           'Daftar di sini',
